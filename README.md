@@ -39,7 +39,18 @@ Removes everything it added. The hooks, the tmux config block, the files, the li
 
 ## How it works
 
-Claude Code hooks run a small shell script when you submit a prompt, when a tool finishes, when Claude asks you a question or for permission, when a turn ends, and when the session ends. The script knows its own pane from `$TMUX_PANE` and stamps a `@claude_status` option on it. The border badge renders from that, and the tab takes the most urgent status of any pane in the window.
+Claude Code hooks run a small shell script on six events:
+
+| Event | Matcher | State |
+|---|---|---|
+| `UserPromptSubmit` | — | working |
+| `PostToolUse` | — | working |
+| `PreToolUse` | `AskUserQuestion` | blocked |
+| `Notification` | `permission_prompt` | blocked |
+| `Stop` | — | idle |
+| `SessionEnd` | — | clear |
+
+The script knows its own pane from `$TMUX_PANE` and stamps a `@claude_status` option on it. The border badge renders from that, and the tab takes the most urgent status of any pane in the window.
 
 Some details it gets right:
 
