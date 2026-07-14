@@ -30,12 +30,28 @@ else
 fi
 
 # Layer 3: window tab aggregates every pane's status, attention > working > done.
+# window-status-current-style (themes often set it globally) would hide the
+# colour on the focused window's tab, so working/attention override it
+# per-window too. "done" defers to the theme there: green on the tab you are
+# already looking at is noise, and the pane badge shows it anyway.
 statuses=$(tmux list-panes -t "$TMUX_PANE" -F '#{@claude_status}')
 case "$statuses" in
-  *attention*) tmux set -w -t "$TMUX_PANE" window-status-style 'fg=white,bg=red' ;;
-  *working*)   tmux set -w -t "$TMUX_PANE" window-status-style 'fg=black,bg=yellow' ;;
-  *done*)      tmux set -w -t "$TMUX_PANE" window-status-style 'fg=black,bg=green' ;;
-  *)           tmux set -w -u -t "$TMUX_PANE" window-status-style ;;
+  *attention*)
+    tmux set -w -t "$TMUX_PANE" window-status-style 'fg=white,bg=red'
+    tmux set -w -t "$TMUX_PANE" window-status-current-style 'fg=white,bg=red,bold'
+    ;;
+  *working*)
+    tmux set -w -t "$TMUX_PANE" window-status-style 'fg=black,bg=yellow'
+    tmux set -w -t "$TMUX_PANE" window-status-current-style 'fg=black,bg=yellow,bold'
+    ;;
+  *done*)
+    tmux set -w -t "$TMUX_PANE" window-status-style 'fg=black,bg=green'
+    tmux set -w -u -t "$TMUX_PANE" window-status-current-style
+    ;;
+  *)
+    tmux set -w -u -t "$TMUX_PANE" window-status-style
+    tmux set -w -u -t "$TMUX_PANE" window-status-current-style
+    ;;
 esac
 
 exit 0

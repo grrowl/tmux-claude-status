@@ -1,27 +1,16 @@
 # tmux-claude-status
 
-See what every Claude Code session in your tmux is doing, at a glance. A hook script tells tmux when Claude is working, when it needs you, and when it is done, and tmux shows that as colour in three places:
+Your tmux tells you what Claude Code is doing.
 
-1. **Pane badge.** Each pane running Claude gets a coloured label in its border, e.g. a yellow "⚙ working" chip. Panes without Claude show nothing extra.
-2. **Pane tint.** When Claude is waiting for your input, the whole pane background gets a subtle red tint, so you cannot miss it across a wall of splits.
-3. **Window tab.** The tab in the status line takes the combined state of all panes in that window. It turns red if any Claude needs you, yellow if any is still working, and green once all are done.
+**Yellow** = working. **Red** = needs you. **Green** = done.
 
-The states are:
+You see it in three places:
 
-| Colour | State | Set by |
-| --- | --- | --- |
-| Yellow | working | you submit a prompt, or a tool call finishes |
-| Red | needs you | a permission prompt appears, or Claude goes idle waiting for input |
-| Green | done | Claude finishes its turn |
-| (theme default) | cleared | the Claude session ends |
+1. A badge in the pane border. "⚙ working", "● needs you", "✓ done".
+2. A red tint over the whole pane when Claude is waiting on you.
+3. The window tab, rolled up across every pane in it. Red beats yellow beats green.
 
-Subagents are handled correctly. The tab stays yellow while subagents run, because only the end of the whole turn sets green.
-
-## Requirements
-
-- tmux 3.2 or newer
-- Claude Code with `~/.claude/` present
-- python3 (used only by the installer to edit JSON safely)
+No wrapper. No daemon. No workspace manager. You already have a Claude workflow, and it already runs in tmux. This adds colour and gets out of the way.
 
 ## Install
 
@@ -31,19 +20,13 @@ cd tmux-claude-status
 ./install.sh
 ```
 
-The installer does three things:
+That's it. Running Claude sessions pick it up without a restart.
 
-1. It copies `tmux-status.sh` to `~/.claude/tmux-status.sh`.
-2. It adds hooks to `~/.claude/settings.json` for the `UserPromptSubmit`, `PostToolUse`, `Notification`, `Stop`, and `SessionEnd` events. It backs the file up first, writes atomically, and refuses to touch a file that is not valid JSON. Claude Code reloads settings on its own, so running sessions pick the hooks up without a restart.
-3. It writes `~/.claude/tmux-claude-status.conf` and sources it from your tmux config with a marked block. Your existing `pane-border-format` is captured and kept, and the badge is added in front of it. If a tmux server is running, the config is applied live.
-
-Re-running the installer is safe and acts as an upgrade. It replaces its own hooks instead of duplicating them, and it keeps the border format it captured the first time.
-
-Try it without waiting for Claude:
+Don't want to wait for Claude to see it?
 
 ```sh
-~/.claude/tmux-status.sh attention   # badge, tint, and red tab appear
-~/.claude/tmux-status.sh clear       # everything back to normal
+~/.claude/tmux-status.sh attention
+~/.claude/tmux-status.sh clear
 ```
 
 ## Uninstall
@@ -52,28 +35,29 @@ Try it without waiting for Claude:
 ./uninstall.sh
 ```
 
-This removes the hooks from `settings.json` (and the `hooks` key itself if nothing else is left in it), removes the marked block from your tmux config, deletes both installed files, clears the live tmux state in every pane and window, and re-sources your own tmux config. Your tmux config is edited in place, so a symlinked `~/.tmux.conf` stays a symlink.
+Removes everything it added. The hooks, the tmux config block, the files, the live colours. Nothing left behind.
 
 ## How it works
 
-Claude Code hooks run shell commands and inherit `$TMUX_PANE`, so the script always knows which pane its session lives in. On each event it stamps a `@claude_status` user option on that pane. The border badge renders from that option declaratively. The window tab colour is computed by the script, which reads `@claude_status` from every pane in the window and applies the priority attention > working > done.
+Claude Code hooks run a small shell script when you submit a prompt, when a tool finishes, when Claude asks permission or goes idle, when a turn ends, and when the session ends. The script knows its own pane from `$TMUX_PANE` and stamps a `@claude_status` option on it. The border badge renders from that, and the tab takes the most urgent status of any pane in the window.
 
-The hook script never prints and always exits 0. That is deliberate, because Claude Code injects `UserPromptSubmit` hook output into the model's context, and a non-zero exit from a `Stop` hook blocks Claude from stopping.
+Some details it gets right:
 
-## Customising
+- Subagents don't fool it. The tab stays yellow until the whole turn is done.
+- The focused window's tab goes yellow and red too, even if your theme styles the current tab. It skips green there, because green on the tab you're already looking at is noise.
+- Your existing `pane-border-format` is kept. The badge is added in front of it.
+- The installer edits `settings.json` atomically, backs it up first, refuses to touch invalid JSON, and won't duplicate hooks if you run it twice. A symlinked `.tmux.conf` stays a symlink.
+- Claude outside tmux? The script exits instantly. Nothing happens.
 
-Colours and badge text live in two places:
+## Customise
 
-- `~/.claude/tmux-claude-status.conf` has the border badge (`@claude_status_badge`). Note that styles inside it use the `#[fg=x]#[bg=y]` form, because a comma inside `#[fg=x,bg=y]` would break the surrounding tmux conditional.
-- `~/.claude/tmux-status.sh` has the pane tint and the tab colours.
+Badge text and border colours live in `~/.claude/tmux-claude-status.conf`. Tint and tab colours live in `~/.claude/tmux-status.sh`. Edit away. Re-running the installer overwrites both, but keeps the border format it captured from you the first time.
 
-Edits to the conf apply on the next `tmux source-file ~/.claude/tmux-claude-status.conf`. Edits to the script apply on the next hook event. Both files are overwritten if you re-run the installer, except for the captured border format, which is kept.
+## Requirements
 
-## Caveats
+tmux 3.2+, Claude Code, python3 (installer only).
 
-- `pane-border-status top` adds a border line to every window, including windows with a single pane. Many people like this, since each pane gets a title bar. If you do not, this tool is not for you in its current form.
-- The uninstaller resets `window-status-style` on every window. If you set that option on specific windows yourself, you will need to set it again.
-- Claude sessions running outside tmux are unaffected. The script exits immediately when `$TMUX` is not set.
+Heads up: this turns on `pane-border-status top`, so every pane gets a title bar. If you hate that, you'll hate this.
 
 ## License
 

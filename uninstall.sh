@@ -103,6 +103,7 @@ if command -v tmux >/dev/null && tmux ls >/dev/null 2>&1; then
   done
   tmux list-windows -a -F '#{window_id}' 2>/dev/null | while read -r win; do
     tmux set -w -u -t "$win" window-status-style 2>/dev/null
+    tmux set -w -u -t "$win" window-status-current-style 2>/dev/null
   done
   for conf in "$HOME/.tmux.conf" "$HOME/.config/tmux/tmux.conf"; do
     if [ -f "$conf" ]; then
