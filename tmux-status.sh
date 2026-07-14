@@ -17,8 +17,17 @@ command -v tmux >/dev/null || exit 0
 state="$1"
 
 case "$state" in
-  working|attention|done) tmux set -p -t "$TMUX_PANE" @claude_status "$state" ;;
-  clear)                  tmux set -p -u -t "$TMUX_PANE" @claude_status ;;
+  attention)
+    # Notifications also fire when a *finished* session sits idle. Only escalate
+    # to attention when Claude is mid-turn (working): that means it is genuinely
+    # blocked on you — a permission prompt or a question. A done/idle session
+    # stays done instead of nagging red.
+    cur=$(tmux show -pv -t "$TMUX_PANE" @claude_status 2>/dev/null)
+    { [ "$cur" = working ] || [ "$cur" = attention ]; } || exit 0
+    tmux set -p -t "$TMUX_PANE" @claude_status attention
+    ;;
+  working|done) tmux set -p -t "$TMUX_PANE" @claude_status "$state" ;;
+  clear)        tmux set -p -u -t "$TMUX_PANE" @claude_status ;;
   *) exit 0 ;;
 esac
 

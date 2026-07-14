@@ -44,6 +44,7 @@ Claude Code hooks run a small shell script when you submit a prompt, when a tool
 Some details it gets right:
 
 - Subagents don't fool it. The tab stays yellow until the whole turn is done.
+- A finished session doesn't nag. Red means Claude is blocked on you mid-turn (a permission prompt or a question). A session that's done and sitting idle stays green.
 - The focused window's tab goes yellow and red too, even if your theme styles the current tab. It skips green there, because green on the tab you're already looking at is noise.
 - Your existing `pane-border-format` is kept. The badge is added in front of it.
 - The installer edits `settings.json` atomically, backs it up first, refuses to touch invalid JSON, and won't duplicate hooks if you run it twice. A symlinked `.tmux.conf` stays a symlink.
