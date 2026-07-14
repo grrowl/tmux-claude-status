@@ -14,7 +14,7 @@ MARKER_BEGIN='# >>> tmux-claude-status >>>'
 DEFAULT_BORDER_FORMAT='#{?pane_active,#[reverse],}#{pane_index}#[default] "#{pane_title}"'
 # Styles use #[fg=x]#[bg=y] (not #[fg=x,bg=y]) — a comma inside the badge would
 # terminate the surrounding #{?,,} conditional.
-BADGE='#{?#{==:#{@claude_status},working},#[fg=black]#[bg=yellow] ⚙ working #[default] ,#{?#{==:#{@claude_status},attention},#[fg=white]#[bg=red] ● needs you #[default] ,#{?#{==:#{@claude_status},done},#[fg=black]#[bg=green] ✓ done #[default] ,}}}'
+BADGE='#{?#{==:#{@claude_status},working},#[fg=black]#[bg=yellow] ⚙ working #[default] ,#{?#{==:#{@claude_status},blocked},#[fg=white]#[bg=red] ● blocked #[default] ,#{?#{==:#{@claude_status},idle},#[fg=black]#[bg=green] ✓ idle #[default] ,}}}'
 
 die() { echo "error: $*" >&2; exit 1; }
 
@@ -116,16 +116,18 @@ for event in list(hooks):
         del hooks[event]
 
 CMD = "~/.claude/tmux-status.sh"
-for event, state in [
-    ("UserPromptSubmit", "working"),
-    ("PostToolUse", "working"),
-    ("Notification", "attention"),
-    ("Stop", "done"),
-    ("SessionEnd", "clear"),
+for event, matcher, state in [
+    ("UserPromptSubmit", None, "working"),
+    ("PostToolUse", None, "working"),
+    ("PreToolUse", "AskUserQuestion", "blocked"),
+    ("Notification", "permission_prompt", "blocked"),
+    ("Stop", None, "idle"),
+    ("SessionEnd", None, "clear"),
 ]:
-    hooks.setdefault(event, []).append(
-        {"hooks": [{"type": "command", "command": f"{CMD} {state}"}]}
-    )
+    group = {"hooks": [{"type": "command", "command": f"{CMD} {state}"}]}
+    if matcher:
+        group = {"matcher": matcher, **group}
+    hooks.setdefault(event, []).append(group)
 
 settings["hooks"] = hooks
 tmp = path + ".tmp"
@@ -144,4 +146,4 @@ fi
 
 echo
 echo "done. Claude Code reloads settings automatically, so running sessions pick this up too."
-echo "try it:   $SCRIPT_DEST attention     (then: $SCRIPT_DEST clear)"
+echo "try it:   $SCRIPT_DEST blocked     (then: $SCRIPT_DEST clear)"
