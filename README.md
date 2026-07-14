@@ -52,6 +52,8 @@ Safely removes everything install added, nothing left behind.
 
 ## How it works
 
+![two panes, one working and one blocked, with the window tabs coloured to match](docs/img/how-it-works.png)
+
 Claude Code hooks run a small shell script on six events:
 
 | Event | Matcher | State |
