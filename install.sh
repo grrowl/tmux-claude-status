@@ -14,7 +14,7 @@ MARKER_BEGIN='# >>> tmux-claude-status >>>'
 DEFAULT_BORDER_FORMAT='#{?pane_active,#[reverse],}#{pane_index}#[default] "#{pane_title}"'
 # Styles use #[fg=x]#[bg=y] (not #[fg=x,bg=y]) — a comma inside the badge would
 # terminate the surrounding #{?,,} conditional.
-BADGE='#{?#{==:#{@claude_status},working},#[fg=black]#[bg=yellow] ⚙ working #[default] ,#{?#{==:#{@claude_status},blocked},#[fg=white]#[bg=red] ● blocked #[default] ,#{?#{==:#{@claude_status},idle},#[fg=black]#[bg=green] ✓ idle #[default] ,}}}'
+BADGE='#{?#{==:#{@claude_status},working},#[fg=black]#[bg=yellow] ⇄ working #[default] ,#{?#{==:#{@claude_status},blocked},#[fg=white]#[bg=red] ✻ blocked #[default] ,#{?#{==:#{@claude_status},idle},#[fg=black]#[bg=green] · idle #[default] ,}}}'
 
 die() { echo "error: $*" >&2; exit 1; }
 
