@@ -12,7 +12,7 @@ You get feedback in three places:
 
 1. A badge in the pane border. "⇄ working", "✻ blocked", "· idle".
 2. A red tint over the whole pane when Claude is blocked on you.
-3. The window tab shows the aggregate of all claude panes in it -- red if any are blocked, yellow if any are working, etc;
+3. The window tab shows the aggregate of all claude panes in it -- red if any are blocked, yellow if any are working. Idle leaves the tab alone; your theme keeps it.
 
 This is kept intentionally simple. I tried so many agent monitoring wrappers like cmux, herdr, etc. and they're all in some way super annoying to use. I already use tmux. Claude Code already uses tmux. Tmux has great support in terminal emulators, you can remote into it, you can detach and attach it — idc if it smells like the 80s, it works.
 
@@ -48,7 +48,7 @@ You can preview inside an existing tmux session:
 ./uninstall.sh
 ```
 
-Safely removes everything install added, nothing left behind.
+Safely removes everything install added. The only thing kept is a backup of your `settings.json` at `~/.claude/settings.json.tmux-claude-status.bak`, in case you want to check nothing else changed.
 
 ## How it works
 
@@ -75,6 +75,8 @@ Some details we paid attention to:
 - Your existing `pane-border-format` is kept. The badge is added in front of it.
 - The installer edits `settings.json` atomically, backs it up first, refuses to touch invalid JSON, and won't duplicate hooks if you run it twice. A symlinked `.tmux.conf` stays a symlink.
 - Claude outside tmux is a safe no-op.
+
+One known edge case: if you kill a pane while it's blocked or working, the window tab keeps its colour until another Claude event fires in that window. Nothing re-aggregates on pane death.
 
 ## Customise
 

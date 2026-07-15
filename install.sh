@@ -34,9 +34,14 @@ if [ -f "$CONF_DEST" ]; then
   orig="$(sed -n "s/^set -g @claude_border_orig '\(.*\)'$/\1/p" "$CONF_DEST" | head -n1)"
   [ -n "$orig" ] && echo "reusing original border format captured by previous install"
 fi
-if [ -z "$orig" ] && command -v tmux >/dev/null && tmux ls >/dev/null 2>&1; then
-  orig="$(tmux show -gv pane-border-format 2>/dev/null || true)"
-  case "$orig" in *@claude_status*) orig="" ;; esac
+if [ -z "$orig" ]; then
+  if command -v tmux >/dev/null && tmux ls >/dev/null 2>&1; then
+    orig="$(tmux show -gv pane-border-format 2>/dev/null || true)"
+    case "$orig" in *@claude_status*) orig="" ;; esac
+  else
+    echo "warning: no running tmux server to capture pane-border-format from; using the tmux default." >&2
+    echo "         if your tmux config sets a custom pane-border-format, re-run this installer from inside tmux." >&2
+  fi
 fi
 case "$orig" in
   *"'"*)

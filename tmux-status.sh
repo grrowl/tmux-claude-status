@@ -7,7 +7,7 @@
 # Layer 3: colours the window tab from the aggregate of all panes in the window.
 
 # Claude Code injects UserPromptSubmit hook stdout into the model's context,
-# and a non-zero exit from a Stop hook blocks Claude from stopping — so this
+# and exit code 2 from a Stop hook blocks Claude from stopping — so this
 # script must never print and must always exit 0.
 exec >/dev/null 2>&1
 
@@ -32,11 +32,11 @@ else
   tmux set -p -u -t "$TMUX_PANE" window-style
 fi
 
-# Layer 3: window tab aggregates every pane's status, blocked > working > idle.
+# Layer 3: window tab aggregates every pane's status, blocked > working.
 # window-status-current-style (themes often set it globally) would hide the
 # colour on the focused window's tab, so blocked/working override it per-window
-# too. "idle" defers to the theme there: green on the tab you are already
-# looking at is noise, and the pane badge shows it anyway.
+# too. "idle" leaves the tab entirely to the theme: a coloured tab on every
+# finished session is noise, and the pane badge shows idle anyway.
 statuses=$(tmux list-panes -t "$TMUX_PANE" -F '#{@claude_status}')
 case "$statuses" in
   *blocked*)
@@ -46,10 +46,6 @@ case "$statuses" in
   *working*)
     tmux set -w -t "$TMUX_PANE" window-status-style 'fg=black,bg=yellow'
     tmux set -w -t "$TMUX_PANE" window-status-current-style 'fg=black,bg=yellow,bold'
-    ;;
-  *idle*)
-    tmux set -w -t "$TMUX_PANE" window-status-style 'fg=black,bg=green'
-    tmux set -w -u -t "$TMUX_PANE" window-status-current-style
     ;;
   *)
     tmux set -w -u -t "$TMUX_PANE" window-status-style
