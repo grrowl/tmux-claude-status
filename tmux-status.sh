@@ -3,6 +3,9 @@
 # Usage (called by Claude Code hooks):
 #   tmux-status.sh <working|busy|blocked|idle|subagent-stop|clear>
 #
+# "busy" means Claude did something, so it is not waiting on you. It only ever
+# lowers blocked back to working; it never wakes an idle pane.
+#
 # Layer 1: sets @claude_status on this pane; the pane border badge renders from it.
 # Layer 2: tints this pane's background while Claude is blocked on you.
 # Layer 3: colours the window tab from the aggregate of all panes in the window.
@@ -63,12 +66,22 @@ case "$state" in
     tmux set -p -t "$TMUX_PANE" @claude_agents "${2:-0}"
     ;;
   busy)
-    # PostToolUse. Its only job is dropping blocked back to working once you
-    # approve a prompt. Reading working already means there is nothing to write,
-    # and reading idle means the main thread has stopped, so the call belongs to
-    # a subagent. Blocked is the one genuinely ambiguous case — an approval and a
-    # background subagent's tool call look identical — and so the only one worth
-    # spawning a parser for. Everything else exits before the fork.
+    # PostToolUse and MessageDisplay. Both mean the same thing: Claude is doing
+    # something, so it is not waiting on you. Its only job is dropping blocked
+    # back to working — when you approve a prompt (PostToolUse), or when you
+    # dismiss a question with "Chat about this" and Claude answers in prose
+    # instead, which fires no PostToolUse at all (MessageDisplay).
+    #
+    # Reading working already means there is nothing to write, and reading idle
+    # means the main thread has stopped, so the call belongs to a subagent.
+    # Blocked is the one genuinely ambiguous case — an approval and a background
+    # subagent's tool call look identical — and so the only one worth spawning a
+    # parser for. Everything else exits before the fork.
+    #
+    # Ordering is what makes MessageDisplay safe: any preamble Claude writes
+    # before asking is displayed before the tool runs, so it lands while the pane
+    # still reads working and hits the fast path above. Verified by holding a
+    # question open and watching red survive.
     [ "$(status)" = blocked ] || exit 0
     set -- $(parse)
     # A subagent's tool call must never clear a prompt you have not answered.

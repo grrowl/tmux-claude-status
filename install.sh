@@ -126,6 +126,7 @@ CMD = "~/.claude/tmux-status.sh"
 for event, matcher, state in [
     ("UserPromptSubmit", None, "working"),
     ("PostToolUse", None, "busy"),
+    ("MessageDisplay", None, "busy"),
     ("PreToolUse", "AskUserQuestion", "blocked"),
     ("Notification", "permission_prompt", "blocked"),
     ("SubagentStop", None, "subagent-stop"),
