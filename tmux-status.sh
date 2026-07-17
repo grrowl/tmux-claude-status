@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tmux-claude-status — Claude Code hook that colours tmux by Claude's status.
 # Usage (called by Claude Code hooks):
-#   tmux-status.sh <working|busy|blocked|idle|subagent-stop|clear>
+#   tmux-status.sh <working|busy|blocked|idle|stop-failed|subagent-stop|clear>
 #
 # "busy" means Claude did something, so it is not waiting on you. It only ever
 # lowers blocked back to working; it never wakes an idle pane.
@@ -50,9 +50,9 @@ print("%d %d" % (1 if me else 0, n))
 ' 2>/dev/null
 }
 
-# States are purely event-driven — no idle timers. "blocked" is only wired to
-# the permission_prompt notification and the AskUserQuestion tool, so red always
-# means Claude is waiting on you right now.
+# States are purely event-driven — no idle timers. "blocked" means the turn has
+# stopped and needs you: a permission prompt, an AskUserQuestion, or a turn that
+# died on an API error. Red always means come and look.
 case "$state" in
   working|blocked)
     tmux set -p -t "$TMUX_PANE" @claude_status "$state"
@@ -87,6 +87,21 @@ case "$state" in
     # A subagent's tool call must never clear a prompt you have not answered.
     [ "${1:-0}" = 1 ] && exit 0
     tmux set -p -t "$TMUX_PANE" @claude_status working
+    ;;
+  stop-failed)
+    # StopFailure. The turn died on an API error, so it fires in Stop's place
+    # and nothing else follows — the pane would sit yellow on work that gave up
+    # minutes ago. Red is honest here: both mean come and look.
+    #
+    # A subagent that exhausts its retries fires this too, with its own
+    # agent_id, and that must not paint the pane: the main thread gets the
+    # error back and carries on to its own Stop. Rare enough that the fork
+    # costs nothing.
+    set -- $(parse)
+    [ "${1:-0}" = 1 ] && exit 0
+    # No background_tasks in this payload, so @claude_agents is left alone
+    # rather than zeroed; the next Stop recounts it from the real list.
+    tmux set -p -t "$TMUX_PANE" @claude_status blocked
     ;;
   subagent-stop)
     # Only to clear the badge promptly; the next Stop would recount anyway.

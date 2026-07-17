@@ -131,6 +131,7 @@ for event, matcher, state in [
     ("Notification", "permission_prompt", "blocked"),
     ("SubagentStop", None, "subagent-stop"),
     ("Stop", None, "idle"),
+    ("StopFailure", None, "stop-failed"),
     ("SessionEnd", None, "clear"),
 ]:
     group = {"hooks": [{"type": "command", "command": f"{CMD} {state}"}]}
