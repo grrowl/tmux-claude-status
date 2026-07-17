@@ -30,7 +30,7 @@ Because I'm wary of all these tools who take over your system and break shit, I'
 
 * Adds two files to `~/.claude`: `tmux-status.sh` (the hook script) and `tmux-claude-status.conf` (badge text and colours).
 * Adds one `source` line to your `~/.tmux.conf`, or to `~/.config/tmux/tmux.conf` if that's the one you use. It goes inside `# >>> tmux-claude-status >>>` markers so the uninstaller can find it again.
-* Adds the eight hooks below to `~/.claude/settings.json`. It backs that file up first, and it won't touch the file if the JSON is invalid.
+* Adds the nine hooks below to `~/.claude/settings.json`. It backs that file up first, and it won't touch the file if the JSON is invalid.
 
 That's it. Running Claude sessions pick it up without a restart.
 
@@ -54,7 +54,7 @@ Safely removes everything install added. The only thing kept is a backup of your
 
 ![two panes, one working and one blocked, with the window tabs coloured to match](docs/img/how-it-works.png)
 
-Claude Code hooks run a small shell script on eight events:
+Claude Code hooks run a small shell script on nine events:
 
 | Event | Matcher | State |
 |---|---|---|
@@ -65,6 +65,7 @@ Claude Code hooks run a small shell script on eight events:
 | `Notification` | `permission_prompt` | blocked |
 | `SubagentStop` | — | subagent-stop |
 | `Stop` | — | idle |
+| `StopFailure` | — | stop-failed |
 | `SessionEnd` | — | clear |
 
 The script knows its own pane from `$TMUX_PANE` and stamps a `@claude_status` option on it. The border badge renders from that, and the tab takes the most urgent status of any pane in the window.
@@ -77,20 +78,16 @@ Reading the payload costs about 16ms, so the script avoids it wherever it alread
 
 `MessageDisplay` is there because of a gap. Answering a question normally fires `PostToolUse` and clears red. Dismissing one with "Chat about this" fires nothing, so red used to sit there for as long as Claude took to reply. `MessageDisplay` fires when Claude writes prose, which is the proof it is working rather than waiting. Any preamble Claude writes before asking is displayed before the tool runs, so it arrives while the pane still reads working and changes nothing.
 
-### Known gap
-
-Pressing Esc to cancel fires no hook at all. Not `PostToolUse`, not `PostToolUseFailure`, and not even `Stop`, which is documented as not firing on user interrupts. So a pane interrupted with Esc keeps whatever colour it had until you type your next prompt, which is the one case here that stays wrong. Fixing it would need a timer, and a timer would clear red while Claude is genuinely waiting, which is a worse lie than the one it fixes.
+Red also means a turn that died rather than finished. When the API fails, Claude retries, and if it gives up the turn ends on `StopFailure` instead of `Stop`. Nothing else fires, so a pane would otherwise sit yellow forever on work that stopped minutes ago. Red is honest for both, because both mean the same thing: come and look. A subagent that exhausts its own retries fires `StopFailure` too, so `agent_id` is checked here as well and only the main thread's failure paints the pane; the main turn gets the error back and carries on to its own `Stop`. The payload has no `background_tasks`, so the subagent count is left alone for that `Stop` to recount.
 
 Some details we paid attention to:
 
 - Subagents don't fool it. The tab stays coloured until every subagent is done, not just the main turn.
-- No timers. Red fires the instant Claude asks a question or needs permission.
+- No timers. Every state change is driven by a hook event, never by polling.
 - The focused window's tab color overrides to yellow and red when attention is needed (my current tab is usually blue).
 - Your existing `pane-border-format` is kept. The badge is added in front of it.
 - The installer edits `settings.json` atomically, backs it up first, refuses to touch invalid JSON, and won't duplicate hooks if you run it twice. A symlinked `.tmux.conf` stays a symlink.
 - Claude outside tmux is a safe no-op.
-
-One known edge case: if you kill a pane while it's blocked or working, the window tab keeps its colour until another Claude event fires in that window. Nothing re-aggregates on pane death.
 
 ## Customise
 
