@@ -10,9 +10,9 @@ This repo installs hooks into claude which report current status to the containi
 
 You get feedback in three places:
 
-1. A badge in the pane border. "⇄ working", "✻ blocked", "· idle".
+1. A badge in the pane border. "⇄ working", "✻ blocked", "⇄ subagent", "· idle".
 2. A red tint over the whole pane when Claude is blocked on you.
-3. The window tab shows the aggregate of all claude panes in it -- red if any are blocked, yellow if any are working. Idle leaves the tab alone; your theme keeps it.
+3. The window tab shows the aggregate of all claude panes in it -- red if any are blocked, bright yellow if any are working, dim yellow if the only work left is background subagents. Idle leaves the tab alone; your theme keeps it.
 
 This is kept intentionally simple. I tried so many agent monitoring wrappers like cmux, herdr, etc. and they're all in some way super annoying to use. I already use tmux. Claude Code already uses tmux. Tmux has great support in terminal emulators, you can remote into it, you can detach and attach it — idc if it smells like the 80s, it works.
 
@@ -30,7 +30,7 @@ Because I'm wary of all these tools who take over your system and break shit, I'
 
 * Adds two files to `~/.claude`: `tmux-status.sh` (the hook script) and `tmux-claude-status.conf` (badge text and colours).
 * Adds one `source` line to your `~/.tmux.conf`, or to `~/.config/tmux/tmux.conf` if that's the one you use. It goes inside `# >>> tmux-claude-status >>>` markers so the uninstaller can find it again.
-* Adds the six hooks below to `~/.claude/settings.json`. It backs that file up first, and it won't touch the file if the JSON is invalid.
+* Adds the seven hooks below to `~/.claude/settings.json`. It backs that file up first, and it won't touch the file if the JSON is invalid.
 
 That's it. Running Claude sessions pick it up without a restart.
 
@@ -54,22 +54,29 @@ Safely removes everything install added. The only thing kept is a backup of your
 
 ![two panes, one working and one blocked, with the window tabs coloured to match](docs/img/how-it-works.png)
 
-Claude Code hooks run a small shell script on six events:
+Claude Code hooks run a small shell script on seven events:
 
 | Event | Matcher | State |
 |---|---|---|
 | `UserPromptSubmit` | — | working |
-| `PostToolUse` | — | working |
+| `PostToolUse` | — | busy |
 | `PreToolUse` | `AskUserQuestion` | blocked |
 | `Notification` | `permission_prompt` | blocked |
+| `SubagentStop` | — | subagent-stop |
 | `Stop` | — | idle |
 | `SessionEnd` | — | clear |
 
 The script knows its own pane from `$TMUX_PANE` and stamps a `@claude_status` option on it. The border badge renders from that, and the tab takes the most urgent status of any pane in the window.
 
+Subagents get their own shade. Bright yellow means the main thread is working. Dim yellow means the main thread has finished but background subagents are still running, which is what you see after Claude hands work off and returns to you. Precedence runs blocked, then working, then subagent, then idle, so the main thread always wins the badge when both are active.
+
+Telling them apart takes a little care, because hooks fire inside subagents too, with the same `$TMUX_PANE`. A subagent's tool calls would otherwise look identical to the main thread's. Two fields in the hook payload sort it out. `agent_id` is only present when a hook fires inside a subagent, so it identifies who made a tool call. `background_tasks` arrives on `Stop` and lists what is still running, so the script recounts live subagents from it instead of keeping its own tally. That means a subagent which dies without reporting cannot strand the badge, because the next `Stop` corrects the count from the real list. Only subagents are counted, not background shells, or a dev server left running would hold the pane yellow forever.
+
+Reading the payload costs about 16ms, so the script avoids it wherever it already knows the answer. `PostToolUse` exists only to drop blocked back to working once you approve a prompt. If the pane already reads working there is nothing to write, and if it reads idle then the main thread has stopped, so the tool call belongs to a subagent. Blocked is the one case where an approval and a subagent's tool call genuinely look the same, so that is the only time the script parses anything.
+
 Some details we paid attention to:
 
-- Subagents don't fool it. The tab stays yellow until the whole turn is done.
+- Subagents don't fool it. The tab stays coloured until every subagent is done, not just the main turn.
 - No timers. Red fires the instant Claude asks a question or needs permission.
 - The focused window's tab color overrides to yellow and red when attention is needed (my current tab is usually blue).
 - Your existing `pane-border-format` is kept. The badge is added in front of it.

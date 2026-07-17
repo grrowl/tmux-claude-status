@@ -14,7 +14,9 @@ MARKER_BEGIN='# >>> tmux-claude-status >>>'
 DEFAULT_BORDER_FORMAT='#{?pane_active,#[reverse],}#{pane_index}#[default] "#{pane_title}"'
 # Styles use #[fg=x]#[bg=y] (not #[fg=x,bg=y]) — a comma inside the badge would
 # terminate the surrounding #{?,,} conditional.
-BADGE='#{?#{==:#{@claude_status},working},#[fg=black]#[bg=yellow] ⇄ working #[default] ,#{?#{==:#{@claude_status},blocked},#[fg=white]#[bg=red] ✻ blocked #[default] ,#{?#{==:#{@claude_status},idle},#[fg=black]#[bg=green] · idle #[default] ,}}}'
+# Precedence: blocked > working > subagent > idle. @claude_agents is tested with
+# a bare #{?...}, which tmux reads as false when the value is empty or "0".
+BADGE='#{?#{==:#{@claude_status},blocked},#[fg=white]#[bg=red] ✻ blocked #[default] ,#{?#{==:#{@claude_status},working},#[fg=black]#[bg=yellow] ⇄ working #[default] ,#{?#{@claude_agents},#[fg=black]#[bg=colour136] ⇄ subagent #[default] ,#{?#{==:#{@claude_status},idle},#[fg=black]#[bg=green] · idle #[default] ,}}}}'
 
 die() { echo "error: $*" >&2; exit 1; }
 
@@ -123,9 +125,10 @@ for event in list(hooks):
 CMD = "~/.claude/tmux-status.sh"
 for event, matcher, state in [
     ("UserPromptSubmit", None, "working"),
-    ("PostToolUse", None, "working"),
+    ("PostToolUse", None, "busy"),
     ("PreToolUse", "AskUserQuestion", "blocked"),
     ("Notification", "permission_prompt", "blocked"),
+    ("SubagentStop", None, "subagent-stop"),
     ("Stop", None, "idle"),
     ("SessionEnd", None, "clear"),
 ]:

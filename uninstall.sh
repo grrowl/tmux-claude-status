@@ -99,6 +99,7 @@ if command -v tmux >/dev/null && tmux ls >/dev/null 2>&1; then
   tmux set -gu pane-border-status 2>/dev/null
   tmux list-panes -a -F '#{pane_id}' 2>/dev/null | while read -r pane; do
     tmux set -p -u -t "$pane" @claude_status 2>/dev/null
+    tmux set -p -u -t "$pane" @claude_agents 2>/dev/null
     tmux set -p -u -t "$pane" window-style 2>/dev/null
   done
   tmux list-windows -a -F '#{window_id}' 2>/dev/null | while read -r win; do
