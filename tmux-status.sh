@@ -22,7 +22,8 @@ state="$1"
 
 status() { tmux show -pqv -t "$TMUX_PANE" @claude_status 2>/dev/null; }
 
-# Reads the hook payload from stdin and prints "<from_subagent> <live_subagents>".
+# Reads the hook payload from stdin and prints
+# "<from_subagent> <live_subagents> <hook_event_name>".
 #
 # agent_id is present only when a hook fires inside a subagent, so it is what
 # tells a subagent's tool call apart from the main thread's. background_tasks
@@ -40,13 +41,13 @@ import json, sys
 try:
     d = json.load(sys.stdin)
 except Exception:
-    print("0 0"); raise SystemExit
+    print("0 0 -"); raise SystemExit
 me = d.get("agent_id")
 bg = d.get("background_tasks") or []
 n = sum(1 for t in bg
         if isinstance(t, dict) and t.get("type") == "subagent"
         and t.get("status") == "running" and t.get("id") != me)
-print("%d %d" % (1 if me else 0, n))
+print("%d %d %s" % (1 if me else 0, n, d.get("hook_event_name") or "-"))
 ' 2>/dev/null
 }
 
@@ -54,8 +55,17 @@ print("%d %d" % (1 if me else 0, n))
 # stopped and needs you: a permission prompt, an AskUserQuestion, or a turn that
 # died on an API error. Red always means come and look.
 case "$state" in
-  working|blocked)
-    tmux set -p -t "$TMUX_PANE" @claude_status "$state"
+  working)
+    tmux set -p -t "$TMUX_PANE" @claude_status working
+    ;;
+  blocked)
+    # Stamp when the pane *entered* blocked (transition only, so the +6s
+    # "needs your permission" Notification re-assert does not refresh it).
+    # The busy handler uses its age to tell a racing MessageDisplay flush
+    # from a genuine one.
+    [ "$(status)" = blocked ] ||
+      tmux set -p -t "$TMUX_PANE" @claude_blocked_at "$(date +%s)"
+    tmux set -p -t "$TMUX_PANE" @claude_status blocked
     ;;
   idle)
     # Stop. Recount live subagents from the payload: the main thread has
@@ -78,14 +88,26 @@ case "$state" in
     # subagent's tool call look identical — and so the only one worth spawning a
     # parser for. Everything else exits before the fork.
     #
-    # Ordering is what makes MessageDisplay safe: any preamble Claude writes
-    # before asking is displayed before the tool runs, so it lands while the pane
-    # still reads working and hits the fast path above. Verified by holding a
-    # question open and watching red survive.
+    # MessageDisplay is NOT ordered before the question's PreToolUse. When the
+    # pane is unfocused, Claude Code defers text display and flushes it as the
+    # AskUserQuestion dialog renders, so the preamble's MessageDisplay races
+    # PreToolUse and can land 1ms after blocked was set (observed live). Letting
+    # it through cleared a prompt nobody had answered; the +6s Notification then
+    # re-asserted blocked — the red → normal → red flicker. So a blocked state
+    # younger than 5s is not MessageDisplay's to clear: the flush lands within
+    # ~1s of the question rendering, while the dismissed-question path (read,
+    # dismiss, Claude answers in prose) takes a human longer than 5s — and if it
+    # somehow doesn't, Stop clears the pane at turn end anyway. PostToolUse is
+    # exempt: it only fires while blocked when you approve a permission, and
+    # that clear must stay instant.
     [ "$(status)" = blocked ] || exit 0
     set -- $(parse)
     # A subagent's tool call must never clear a prompt you have not answered.
     [ "${1:-0}" = 1 ] && exit 0
+    if [ "${3:-}" = MessageDisplay ]; then
+      blocked_at=$(tmux show -pqv -t "$TMUX_PANE" @claude_blocked_at 2>/dev/null)
+      [ -n "$blocked_at" ] && [ $(( $(date +%s) - blocked_at )) -lt 5 ] && exit 0
+    fi
     tmux set -p -t "$TMUX_PANE" @claude_status working
     ;;
   stop-failed)
@@ -101,6 +123,7 @@ case "$state" in
     [ "${1:-0}" = 1 ] && exit 0
     # No background_tasks in this payload, so @claude_agents is left alone
     # rather than zeroed; the next Stop recounts it from the real list.
+    tmux set -p -t "$TMUX_PANE" @claude_blocked_at "$(date +%s)"
     tmux set -p -t "$TMUX_PANE" @claude_status blocked
     ;;
   subagent-stop)
@@ -111,6 +134,7 @@ case "$state" in
   clear)
     tmux set -p -u -t "$TMUX_PANE" @claude_status
     tmux set -p -u -t "$TMUX_PANE" @claude_agents
+    tmux set -p -u -t "$TMUX_PANE" @claude_blocked_at
     ;;
   *) exit 0 ;;
 esac
